@@ -1,0 +1,12 @@
+name: skillcast check
+description: Fail when a generated Claude Code, Codex or Cursor file no longer matches its .skillcast/ source.
+inputs:
+  root:
+    description: Repository directory that contains .skillcast/
+    default: .
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+    - shell: bash
+      run: bun run "${{ github.action_path }}/src/bin.ts" check --root "${{ inputs.root }}"

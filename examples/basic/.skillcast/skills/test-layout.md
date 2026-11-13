@@ -1,0 +1,10 @@
+---
+name: test-layout
+description: "Where and how to write tests. Use when asked to add, write or extend tests."
+cursor-globs: "**/*.spec.ts"
+---
+# Test layout
+
+- Put the test next to the source file as `<file>.spec.ts` (for `src/math.ts` that is `src/math.spec.ts`).
+- Import from `bun:test`.
+- One `describe` block per exported function, named exactly like the function, for example `describe("add", ...)`.
