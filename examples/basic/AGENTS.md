@@ -6,3 +6,4 @@
 - Keep changes small and focused on the task.
 
 - Codex: use the skills in `.agents/skills/` when their description matches the task.
+- Run `bun test --coverage` before every commit.
