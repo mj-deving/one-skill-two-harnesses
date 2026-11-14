@@ -7,10 +7,12 @@ Teams that run two coding agents keep the same rules twice (`CLAUDE.md` and `AGE
 ## Five-minute start
 
 ```sh
-npx skillcast init     # or: bunx skillcast init
-npx skillcast build
-npx skillcast check    # exit 0: every generated file matches the source
+npx github:mj-deving/one-skill-two-harnesses init
+npx github:mj-deving/one-skill-two-harnesses build
+npx github:mj-deving/one-skill-two-harnesses check   # exit 0: every generated file matches the source
 ```
+
+This needs Node 20 or newer and nothing else. The package is not on npm yet; the commands run the committed build straight from GitHub.
 
 `init` imports your existing `CLAUDE.md`, `AGENTS.md`, `.claude/skills/*/SKILL.md` and `.agents/skills/*/SKILL.md` into `.skillcast/`. From then on you edit `.skillcast/` only and run `build`.
 

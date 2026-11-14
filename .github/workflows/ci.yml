@@ -19,6 +19,7 @@ jobs:
         shell: bash
         run: |
           bun run build:dist
+          git diff --exit-code dist/ || { echo "dist/bin.js is stale: run bun run build:dist and commit"; exit 1; }
           npm pack
           mkdir -p ../npm-consumer ../bun-consumer
           cp skillcast-0.1.0.tgz ../npm-consumer/ && cp skillcast-0.1.0.tgz ../bun-consumer/
