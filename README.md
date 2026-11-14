@@ -14,7 +14,9 @@ npx github:mj-deving/one-skill-two-harnesses check   # exit 0: every generated f
 
 This needs Node 20 or newer and nothing else. The package is not on npm yet; the commands run the committed build straight from GitHub.
 
-`init` imports your existing `CLAUDE.md`, `AGENTS.md`, `.claude/skills/*/SKILL.md` and `.agents/skills/*/SKILL.md` into `.skillcast/`. From then on you edit `.skillcast/` only and run `build`.
+`init` imports your existing `CLAUDE.md`, `AGENTS.md`, `.claude/skills/*/SKILL.md` and `.agents/skills/*/SKILL.md` into `.skillcast/` and immediately builds every harness file, Cursor rules included, so the `build` right after it reports "up to date". From then on you edit `.skillcast/` only and run `build`.
+
+Messages from the tool say `skillcast build`; until the package is on npm that means `npx github:mj-deving/one-skill-two-harnesses build`. If you do not use Cursor, delete `.cursor/rules/` after each build or ignore it in git; there is no switch to turn one harness off yet.
 
 ## Source format
 
