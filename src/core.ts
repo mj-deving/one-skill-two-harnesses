@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { DEFAULT_ADAPTERS, plan, type Adapter } from './adapters';
+import { adaptersFor, DEFAULT_ADAPTERS, plan, type Adapter } from './adapters';
 import { loadSource, MARKER, normalize, parseFrontmatter, SOURCE_DIR, SourceError, unquote } from './source';
 
 export type Problem = { file: string; kind: 'missing' | 'changed' | 'extra' | 'handwritten'; detail: string };
@@ -11,7 +11,8 @@ const read = (root: string, rel: string) => (existsSync(join(root, rel)) ? readF
 /** Generated files currently on disk in the adapters' skill locations. */
 function generatedOnDisk(root: string, adapters: Adapter[]): string[] {
   const found: string[] = [];
-  for (const a of adapters) {
+  const scan = [...adapters, ...DEFAULT_ADAPTERS.filter((d) => !adapters.some((a) => a.id === d.id))];
+  for (const a of scan) {
     const { dir, file, suffix } = a.skillGlob;
     if (!existsSync(join(root, dir))) continue;
     for (const entry of readdirSync(join(root, dir)).sort()) {
@@ -21,7 +22,7 @@ function generatedOnDisk(root: string, adapters: Adapter[]): string[] {
     }
     if (a.rules && isGenerated(read(root, a.rules.path) ?? '')) found.push(a.rules.path);
   }
-  return found;
+  return [...new Set(found)];
 }
 
 function firstDifference(expected: string, actual: string): string {
@@ -33,7 +34,7 @@ function firstDifference(expected: string, actual: string): string {
   return 'contents differ';
 }
 
-export function check(root: string, adapters: Adapter[] = DEFAULT_ADAPTERS): Problem[] {
+export function check(root: string, adapters: Adapter[] = adaptersFor(root)): Problem[] {
   const planned = plan(loadSource(root), adapters);
   const problems: Problem[] = [];
   for (const [file, expected] of planned) {
@@ -49,7 +50,7 @@ export function check(root: string, adapters: Adapter[] = DEFAULT_ADAPTERS): Pro
 }
 
 /** Writes every projection. Refuses to overwrite a file without the marker unless it is in `adopt`. */
-export function build(root: string, adapters: Adapter[] = DEFAULT_ADAPTERS, adopt: Set<string> = new Set()): string[] {
+export function build(root: string, adapters: Adapter[] = adaptersFor(root), adopt: Set<string> = new Set()): string[] {
   const planned = plan(loadSource(root), adapters);
   for (const file of planned.keys()) {
     const actual = read(root, file);
@@ -75,7 +76,7 @@ export function build(root: string, adapters: Adapter[] = DEFAULT_ADAPTERS, adop
 type Imported = { description: string; extra: Map<string, string>; body: string; from: string };
 
 /** Imports existing CLAUDE.md, AGENTS.md and skills into .skillcast/, then builds. Conflicts abort. */
-export function init(root: string, adapters: Adapter[] = DEFAULT_ADAPTERS): { imported: string[]; built: string[] } {
+export function init(root: string, adapters: Adapter[] = adaptersFor(root)): { imported: string[]; built: string[] } {
   if (existsSync(join(root, SOURCE_DIR))) throw new SourceError(`${SOURCE_DIR}/ already exists`);
   const conflicts: string[] = [];
   const imported: string[] = [];

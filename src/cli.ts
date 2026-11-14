@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { build, check, init } from './core';
+import { ConfigError } from './adapters';
 import { SourceError } from './source';
 
 const USAGE = `skillcast: write agent skills once, project them to Claude Code, Codex and Cursor.
@@ -36,7 +37,7 @@ export function main(argv: string[]): number {
     console.log(USAGE);
     return command === undefined || command === '--help' || command === '-h' ? 0 : 2;
   } catch (e) {
-    if (e instanceof SourceError) {
+    if (e instanceof SourceError || e instanceof ConfigError) {
       console.error(`skillcast: ${e.message}`);
       return 2;
     }

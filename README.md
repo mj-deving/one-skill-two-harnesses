@@ -16,7 +16,7 @@ This needs Node 20 or newer and nothing else. The package is not on npm yet; the
 
 `init` imports your existing `CLAUDE.md`, `AGENTS.md`, `.claude/skills/*/SKILL.md` and `.agents/skills/*/SKILL.md` into `.skillcast/` and immediately builds every harness file, Cursor rules included, so the `build` right after it reports "up to date". From then on you edit `.skillcast/` only and run `build`.
 
-Messages from the tool say `skillcast build`; until the package is on npm that means `npx github:mj-deving/one-skill-two-harnesses build`. If you do not use Cursor, delete `.cursor/rules/` after each build or ignore it in git; there is no switch to turn one harness off yet.
+Messages from the tool say `skillcast build`; until the package is on npm that means `npx github:mj-deving/one-skill-two-harnesses build`.
 
 ## Source format
 
@@ -50,6 +50,29 @@ Harness blocks are `only:claude`, `only:codex` and, in skills, `only:cursor`. Ru
 | Cursor | reads `AGENTS.md` | `.cursor/rules/<name>.mdc` (`description`, `globs`, `alwaysApply`) | cursor.com/docs/context/rules, read 2026-11-13 |
 
 Every generated file carries a comment naming its source. `build` refuses to overwrite a file without that comment, so hand-written files are never lost. Cursor output is generated and covered by golden tests, but it is not measured with real agent runs.
+
+## Any other harness
+
+Choose which harnesses to build, and add any other one, in `.skillcast/config.json`. Without this file, Claude Code, Codex and Cursor are built.
+
+```json
+{
+  "harnesses": [
+    "claude",
+    "codex",
+    { "id": "gemini", "rules": "GEMINI.md", "skills": ".gemini/skills/{name}/SKILL.md", "format": "skill-md" },
+    { "id": "windsurf", "skills": ".windsurf/rules/{name}.md", "format": "plain" }
+  ]
+}
+```
+
+- `skills` is a path with `{name}` either as a folder (`…/{name}/SKILL.md`) or as the file stem (`…/{name}.md`).
+- `format` is `skill-md` (frontmatter `name` and `description`), `mdc` (Cursor-style `description`, `globs`, `alwaysApply`) or `plain` (no frontmatter: a heading, the description, then the body).
+- `rules` is optional; leave it out for a harness that already reads `AGENTS.md`.
+- `<!-- only:<id> -->` blocks work for every id in the list.
+- Dropping a built-in harness from the list removes its generated files on the next `build`. Dropping a custom one leaves its files, because skillcast no longer knows its paths; delete them yourself.
+
+The paths and formats in the example are placeholders: check each harness's own documentation before relying on them. Only Claude Code and Codex are measured by the bench.
 
 ## CI
 

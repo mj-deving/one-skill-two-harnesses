@@ -4,8 +4,12 @@
 import { resolve } from "node:path";
 
 // src/core.ts
-import { existsSync as existsSync2, mkdirSync, readdirSync as readdirSync2, readFileSync as readFileSync2, rmSync, writeFileSync } from "node:fs";
-import { dirname, join as join2 } from "node:path";
+import { existsSync as existsSync3, mkdirSync, readdirSync as readdirSync2, readFileSync as readFileSync3, rmSync, writeFileSync } from "node:fs";
+import { dirname, join as join3 } from "node:path";
+
+// src/adapters.ts
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
+import { join as join2 } from "node:path";
 
 // src/source.ts
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -132,25 +136,10 @@ function skillMd(skill, body, mark) {
   return ["---", `name: ${skill.name}`, `description: ${q(skill.description)}`, ...extra, "---", mark, "", body].join(`
 `);
 }
-var claude = {
-  id: "claude",
-  rules: { path: "CLAUDE.md" },
-  skillPath: (n) => `.claude/skills/${n}/SKILL.md`,
-  skillGlob: { dir: ".claude/skills", file: "SKILL.md", suffix: "" },
-  renderSkill: skillMd
-};
-var codex = {
-  id: "codex",
-  rules: { path: "AGENTS.md" },
-  skillPath: (n) => `.agents/skills/${n}/SKILL.md`,
-  skillGlob: { dir: ".agents/skills", file: "SKILL.md", suffix: "" },
-  renderSkill: skillMd
-};
-var cursor = {
-  id: "cursor",
-  skillPath: (n) => `.cursor/rules/${n}.mdc`,
-  skillGlob: { dir: ".cursor/rules", file: null, suffix: ".mdc" },
-  renderSkill: (skill, body, mark) => [
+var FORMATS = ["skill-md", "mdc", "plain"];
+var RENDER = {
+  "skill-md": skillMd,
+  mdc: (skill, body, mark) => [
     "---",
     `description: ${q(skill.description)}`,
     `globs: ${skill.extra.get("cursor-globs") ?? ""}`.trimEnd(),
@@ -160,12 +149,90 @@ var cursor = {
     "",
     body
   ].join(`
+`),
+  plain: (skill, body, mark) => [mark, "", `# ${skill.name}`, "", skill.description, "", body].join(`
 `)
 };
+
+class ConfigError extends Error {
+}
+function fromSpec(spec, where = "harness") {
+  const parts = spec.skills.split("{name}");
+  if (parts.length !== 2)
+    throw new ConfigError(`${where} "${spec.id}": skills path must contain {name} exactly once`);
+  if (!FORMATS.includes(spec.format))
+    throw new ConfigError(`${where} "${spec.id}": unknown format "${spec.format}" (use ${FORMATS.join(", ")})`);
+  const unsafe = (p) => p.startsWith("/") || /^[A-Za-z]:/.test(p) || p.split(/[\\/]/).includes("..");
+  if (spec.rules !== undefined && (typeof spec.rules !== "string" || !spec.rules || unsafe(spec.rules))) {
+    throw new ConfigError(`${where} "${spec.id}": rules must be a relative path inside the repo`);
+  }
+  const [before, after] = parts;
+  if (!before.endsWith("/") || unsafe(spec.skills))
+    throw new ConfigError(`${where} "${spec.id}": skills path must be relative and put {name} after a "/"`);
+  const dir = before.slice(0, -1);
+  let glob;
+  if (after.startsWith("/") && after.split("/").length === 2 && after.length > 1)
+    glob = { dir, file: after.slice(1), suffix: "" };
+  else if (after.startsWith(".") && !after.includes("/"))
+    glob = { dir, file: null, suffix: after };
+  else
+    throw new ConfigError(`${where} "${spec.id}": skills path must end in {name}/<file> or {name}.<ext>`);
+  return {
+    id: spec.id,
+    rules: spec.rules ? { path: spec.rules } : undefined,
+    skillPath: (n) => `${before}${n}${after}`,
+    skillGlob: glob,
+    renderSkill: RENDER[spec.format]
+  };
+}
+var BUILT_IN = [
+  { id: "claude", rules: "CLAUDE.md", skills: ".claude/skills/{name}/SKILL.md", format: "skill-md" },
+  { id: "codex", rules: "AGENTS.md", skills: ".agents/skills/{name}/SKILL.md", format: "skill-md" },
+  { id: "cursor", skills: ".cursor/rules/{name}.mdc", format: "mdc" }
+];
+var [claude, codex, cursor] = BUILT_IN.map((h) => fromSpec(h));
 var DEFAULT_ADAPTERS = [claude, codex, cursor];
+function adaptersFor(root) {
+  const path = join2(root, SOURCE_DIR, "config.json");
+  if (!existsSync2(path))
+    return DEFAULT_ADAPTERS;
+  const where = `${SOURCE_DIR}/config.json`;
+  let config;
+  try {
+    config = JSON.parse(readFileSync2(path, "utf8"));
+  } catch (e) {
+    throw new ConfigError(`${where}: invalid JSON (${e.message})`);
+  }
+  if (!Array.isArray(config.harnesses) || config.harnesses.length === 0)
+    throw new ConfigError(`${where}: "harnesses" must be a non-empty list`);
+  const adapters = config.harnesses.map((h) => {
+    if (typeof h === "string") {
+      const spec = BUILT_IN.find((b) => b.id === h);
+      if (!spec)
+        throw new ConfigError(`${where}: unknown harness "${h}" (built in: ${BUILT_IN.map((b) => b.id).join(", ")}; add others as objects)`);
+      return fromSpec(spec);
+    }
+    const spec = h;
+    if (!spec || typeof spec.id !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(spec.id) || typeof spec.skills !== "string") {
+      throw new ConfigError(`${where}: each custom harness needs "id" (lowercase) and "skills"`);
+    }
+    return fromSpec(spec, where);
+  });
+  const seen = new Set;
+  for (const a of adapters) {
+    for (const key of [`id ${a.id}`, a.rules && `path ${a.rules.path}`, `path ${a.skillPath("x")}`]) {
+      if (!key)
+        continue;
+      if (seen.has(key))
+        throw new ConfigError(`${where}: duplicate ${key}`);
+      seen.add(key);
+    }
+  }
+  return adapters;
+}
 function plan(source, adapters = DEFAULT_ADAPTERS) {
-  const ids = adapters.map((a) => a.id);
-  const ruleIds = adapters.filter((a) => a.rules).map((a) => a.id);
+  const ids = [...new Set([...adapters.map((a) => a.id), ...BUILT_IN.map((b) => b.id)])];
+  const ruleIds = [...new Set([...adapters.filter((a) => a.rules).map((a) => a.id), ...BUILT_IN.filter((b) => b.rules).map((b) => b.id)])];
   const out = new Map;
   for (const a of adapters) {
     if (a.rules && source.rules) {
@@ -182,14 +249,15 @@ ${body}`);
 
 // src/core.ts
 var isGenerated = (text) => text.includes(MARKER);
-var read = (root, rel) => existsSync2(join2(root, rel)) ? readFileSync2(join2(root, rel), "utf8") : null;
+var read = (root, rel) => existsSync3(join3(root, rel)) ? readFileSync3(join3(root, rel), "utf8") : null;
 function generatedOnDisk(root, adapters) {
   const found = [];
-  for (const a of adapters) {
+  const scan = [...adapters, ...DEFAULT_ADAPTERS.filter((d) => !adapters.some((a) => a.id === d.id))];
+  for (const a of scan) {
     const { dir, file, suffix } = a.skillGlob;
-    if (!existsSync2(join2(root, dir)))
+    if (!existsSync3(join3(root, dir)))
       continue;
-    for (const entry of readdirSync2(join2(root, dir)).sort()) {
+    for (const entry of readdirSync2(join3(root, dir)).sort()) {
       const rel = file ? `${dir}/${entry}/${file}` : entry.endsWith(suffix) ? `${dir}/${entry}` : null;
       const text = rel && read(root, rel);
       if (rel && text && isGenerated(text))
@@ -198,7 +266,7 @@ function generatedOnDisk(root, adapters) {
     if (a.rules && isGenerated(read(root, a.rules.path) ?? ""))
       found.push(a.rules.path);
   }
-  return found;
+  return [...new Set(found)];
 }
 function firstDifference(expected, actual) {
   const e = expected.split(`
@@ -211,7 +279,7 @@ function firstDifference(expected, actual) {
   }
   return "contents differ";
 }
-function check(root, adapters = DEFAULT_ADAPTERS) {
+function check(root, adapters = adaptersFor(root)) {
   const planned = plan(loadSource(root), adapters);
   const problems = [];
   for (const [file, expected] of planned) {
@@ -229,7 +297,7 @@ function check(root, adapters = DEFAULT_ADAPTERS) {
   }
   return problems;
 }
-function build(root, adapters = DEFAULT_ADAPTERS, adopt = new Set) {
+function build(root, adapters = adaptersFor(root), adopt = new Set) {
   const planned = plan(loadSource(root), adapters);
   for (const file of planned.keys()) {
     const actual = read(root, file);
@@ -241,20 +309,20 @@ function build(root, adapters = DEFAULT_ADAPTERS, adopt = new Set) {
   for (const [file, content] of planned) {
     if (read(root, file) === content)
       continue;
-    mkdirSync(dirname(join2(root, file)), { recursive: true });
-    writeFileSync(join2(root, file), content);
+    mkdirSync(dirname(join3(root, file)), { recursive: true });
+    writeFileSync(join3(root, file), content);
     changed.push(file);
   }
   for (const file of generatedOnDisk(root, adapters)) {
     if (planned.has(file))
       continue;
-    rmSync(join2(root, file));
+    rmSync(join3(root, file));
     changed.push(`${file} (removed)`);
   }
   return changed;
 }
-function init(root, adapters = DEFAULT_ADAPTERS) {
-  if (existsSync2(join2(root, SOURCE_DIR)))
+function init(root, adapters = adaptersFor(root)) {
+  if (existsSync3(join3(root, SOURCE_DIR)))
     throw new SourceError(`${SOURCE_DIR}/ already exists`);
   const conflicts = [];
   const imported = [];
@@ -272,9 +340,9 @@ function init(root, adapters = DEFAULT_ADAPTERS) {
   const skills = new Map;
   for (const a of adapters.filter((x) => x.skillGlob.file)) {
     const dir = a.skillGlob.dir;
-    if (!existsSync2(join2(root, dir)))
+    if (!existsSync3(join3(root, dir)))
       continue;
-    for (const name of readdirSync2(join2(root, dir)).sort()) {
+    for (const name of readdirSync2(join3(root, dir)).sort()) {
       const from = `${dir}/${name}/${a.skillGlob.file}`;
       const text = read(root, from);
       if (!text || isGenerated(text))
@@ -301,19 +369,19 @@ function init(root, adapters = DEFAULT_ADAPTERS) {
     throw new SourceError(`init stopped, nothing was written:
 - ${conflicts.join(`
 - `)}`);
-  mkdirSync(join2(root, SOURCE_DIR, "skills"), { recursive: true });
+  mkdirSync(join3(root, SOURCE_DIR, "skills"), { recursive: true });
   if (rules)
-    writeFileSync(join2(root, SOURCE_DIR, "rules.md"), rules.body);
+    writeFileSync(join3(root, SOURCE_DIR, "rules.md"), rules.body);
   for (const [name, s] of skills) {
     const extra = [...s.extra].map(([k, v]) => `${k}: ${v}`);
     const head = ["---", `name: ${name}`, `description: ${JSON.stringify(s.description)}`, ...extra, "---", ""].join(`
 `);
-    writeFileSync(join2(root, SOURCE_DIR, "skills", `${name}.md`), `${head}${s.body}`);
+    writeFileSync(join3(root, SOURCE_DIR, "skills", `${name}.md`), `${head}${s.body}`);
   }
   try {
     return { imported, built: build(root, adapters, new Set(imported)) };
   } catch (e) {
-    rmSync(join2(root, SOURCE_DIR), { recursive: true, force: true });
+    rmSync(join3(root, SOURCE_DIR), { recursive: true, force: true });
     if (e instanceof SourceError)
       throw new SourceError(`init stopped, nothing was written:
 - ${e.message}`);
@@ -361,7 +429,7 @@ ${problems.length} problem(s). Fix the source in .skillcast/ and run: skillcast 
     console.log(USAGE);
     return command === undefined || command === "--help" || command === "-h" ? 0 : 2;
   } catch (e) {
-    if (e instanceof SourceError) {
+    if (e instanceof SourceError || e instanceof ConfigError) {
       console.error(`skillcast: ${e.message}`);
       return 2;
     }
