@@ -7,16 +7,14 @@ Teams that run two coding agents keep the same rules twice (`CLAUDE.md` and `AGE
 ## Five-minute start
 
 ```sh
-npx github:mj-deving/one-skill-two-harnesses init
-npx github:mj-deving/one-skill-two-harnesses build
-npx github:mj-deving/one-skill-two-harnesses check   # exit 0: every generated file matches the source
+npx skillcast init
+npx skillcast build
+npx skillcast check   # exit 0: every generated file matches the source
 ```
 
-This needs Node 20 or newer and nothing else. The package is not on npm yet; the commands run the committed build straight from GitHub.
+This needs Node 20 or newer and nothing else. `bunx skillcast` works the same way.
 
 `init` imports your existing `CLAUDE.md`, `AGENTS.md`, `.claude/skills/*/SKILL.md` and `.agents/skills/*/SKILL.md` into `.skillcast/` and immediately builds every harness file, Cursor rules included, so the `build` right after it reports "up to date". From then on you edit `.skillcast/` only and run `build`.
-
-Messages from the tool say `skillcast build`; until the package is on npm that means `npx github:mj-deving/one-skill-two-harnesses build`.
 
 ## Source format
 
