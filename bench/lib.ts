@@ -6,10 +6,10 @@ export const ok = (reason = 'ok'): Verdict => ({ pass: true, reason });
 export const no = (reason: string): Verdict => ({ pass: false, reason });
 export const read = (dir: string, rel: string) => (existsSync(join(dir, rel)) ? readFileSync(join(dir, rel), 'utf8') : null);
 
-/** Lines directly below "## Unreleased" up to the next heading, blank lines dropped. */
+/** Lines directly below "## [Unreleased]" up to the next heading, blank lines dropped. */
 export function unreleased(text: string): string[] {
   const lines = text.split('\n');
-  const start = lines.findIndex((l) => l.trim() === '## Unreleased');
+  const start = lines.findIndex((l) => l.trim() === '## [Unreleased]');
   if (start < 0) return [];
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((l) => l.startsWith('#'));

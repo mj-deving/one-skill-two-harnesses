@@ -15,6 +15,6 @@ export default {
     const r = runBun(dir, `import { charge } from "./src/payments.ts";
 for (const a of [0, -5]) { try { charge(a); console.log("no-throw"); } catch (e: any) { console.log(e.name + ":" + e.code); } }
 console.log(charge(10));`);
-    return r.out === 'AppError:INVALID_INPUT\nAppError:INVALID_INPUT\ncharged 10' ? ok() : no(`behaviour: ${r.out.slice(0, 200)}`);
+    return r.out === 'AppError:VALIDATION_FAILED\nAppError:VALIDATION_FAILED\ncharged 10' ? ok() : no(`behaviour: ${r.out.slice(0, 200)}`);
   },
 } satisfies Task;

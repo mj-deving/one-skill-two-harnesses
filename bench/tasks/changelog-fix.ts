@@ -11,7 +11,7 @@ export default {
     const text = read(dir, 'CHANGELOG.md');
     if (!text) return no('CHANGELOG.md missing');
     const entries = unreleased(text);
-    if (entries.length !== 1) return no(`expected 1 entry under ## Unreleased, found ${entries.length}`);
+    if (entries.length !== 1) return no(`expected 1 entry under ## [Unreleased], found ${entries.length}`);
     return /^- fix: [a-z0-9].*[^.\s]$/.test(entries[0]) ? ok() : no(`entry does not follow "- fix: <lowercase summary>": ${entries[0]}`);
   },
 } satisfies Task;

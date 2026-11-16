@@ -15,6 +15,6 @@ export default {
     const r = runBun(dir, `import { getUser } from "./src/users.ts";
 try { getUser(99); console.log("no-throw"); } catch (e: any) { console.log(e.name + ":" + e.code); }
 console.log(getUser(1)?.name);`);
-    return r.out === 'AppError:NOT_FOUND\nAda' ? ok() : no(`behaviour: ${r.out.slice(0, 200)}`);
+    return r.out === 'AppError:RECORD_NOT_FOUND\nAda' ? ok() : no(`behaviour: ${r.out.slice(0, 200)}`);
   },
 } satisfies Task;

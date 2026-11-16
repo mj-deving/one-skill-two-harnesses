@@ -10,8 +10,8 @@ const SPEC = (fns: string[], file: string) =>
   `import { describe, expect, test } from "bun:test";\nimport * as m from "./${file}";\n` +
   fns.map((f) => `describe("${f}", () => { test("is a function", () => expect(typeof (m as any).${f}).toBe("function")); });\n`).join('');
 
-/** A correct solution per task; the check must pass on it and fail on the untouched fixture. */
-const SOLUTIONS: Record<string, Record<string, string>> = {
+/** Correct under the v1 rules in examples/basic; the v2 checks must reject every one (ISC-23). */
+const V1: Record<string, Record<string, string>> = {
   'changelog-fix': { 'CHANGELOG.md': '# Changelog\n\n## Unreleased\n\n- fix: login sessions no longer expire after five minutes\n' },
   'changelog-feat': { 'CHANGELOG.md': '# Changelog\n\n## Unreleased\n\n- feat: add csv export to the reports page\n\n## 1.0.0\n\n- feat: first release\n' },
   'error-invalid': {
@@ -24,14 +24,24 @@ const SOLUTIONS: Record<string, Record<string, string>> = {
   'test-slug': { 'src/text/slugify.spec.ts': SPEC(['slugify'], 'slugify') },
 };
 
-/** Wrong-but-plausible answers that ignore the skill's convention; each must fail. */
-const DECOYS: Record<string, Record<string, string>> = {
-  'changelog-fix': { 'CHANGELOG.md': '# Changelog\n\n## Unreleased\n\n- Fixed login sessions expiring after five minutes.\n' },
-  'changelog-feat': { 'CHANGELOG.md': '# Changelog\n\n## Unreleased\n\n- feat: add csv export\n\n## 1.0.0\n\n- feat: first release (initial)\n' },
-  'error-invalid': { 'src/payments.ts': 'export function charge(amount: number): string {\n  if (amount <= 0) throw new Error("amount must be positive");\n  return `charged ${amount}`;\n}\n' },
-  'error-notfound': { 'src/users.ts': 'import { AppError } from "./errors";\nconst users = [{ id: 1, name: "Ada" }];\nexport function getUser(id: number) {\n  const u = users.find((x) => x.id === id);\n  if (!u) throw new AppError("USER_MISSING", `user ${id}`);\n  return u;\n}\n' },
+/** A correct solution per task under the v2 rules in bench/v2/.skillcast. */
+const SOLUTIONS: Record<string, Record<string, string>> = {
+  'changelog-fix': { 'CHANGELOG.md': V1['changelog-fix']['CHANGELOG.md'].replace('## Unreleased', '## [Unreleased]') },
+  'changelog-feat': { 'CHANGELOG.md': V1['changelog-feat']['CHANGELOG.md'].replace('## Unreleased', '## [Unreleased]') },
+  'error-invalid': { 'src/payments.ts': V1['error-invalid']['src/payments.ts'].replace('INVALID_INPUT', 'VALIDATION_FAILED') },
+  'error-notfound': { 'src/users.ts': V1['error-notfound']['src/users.ts'].replace('"NOT_FOUND"', '"RECORD_NOT_FOUND"') },
   'test-math': { 'test/math.test.ts': SPEC(['add', 'sub'], '../src/math') },
-  'test-slug': { 'src/text/slugify.spec.ts': SPEC(['slug'], 'slugify').replace('describe("slug"', 'describe("slug helpers"') },
+  'test-slug': { 'test/text/slugify.test.ts': SPEC(['slugify'], '../../src/text/slugify') },
+};
+
+/** Wrong-but-plausible answers that ignore the convention altogether; each must fail. */
+const DECOYS: Record<string, Record<string, string>> = {
+  'changelog-fix': { 'CHANGELOG.md': '# Changelog\n\n## [Unreleased]\n\n- Fixed login sessions expiring after five minutes.\n' },
+  'changelog-feat': { 'CHANGELOG.md': '# Changelog\n\n## [Unreleased]\n\n- feat: add csv export\n\n## 1.0.0\n\n- feat: first release (initial)\n' },
+  'error-invalid': { 'src/payments.ts': 'export function charge(amount: number): string {\n  if (amount <= 0) throw new Error("amount must be positive");\n  return `charged ${amount}`;\n}\n' },
+  'error-notfound': { 'src/users.ts': V1['error-notfound']['src/users.ts'].replace('"NOT_FOUND"', '"USER_MISSING"') },
+  'test-math': { 'src/math.test.ts': SPEC(['add', 'sub'], 'math') },
+  'test-slug': { 'test/text/slugify.test.ts': SPEC(['slug'], '../../src/text/slugify').replace('describe("slug"', 'describe("slug helpers"') },
 };
 
 function fixture(task: Task, extra: Record<string, string> = {}) {
@@ -51,10 +61,14 @@ describe('bench tasks (ISC-10)', () => {
   });
 
   for (const task of tasks) {
-    test(`${task.id}: check passes a correct solution, fails the untouched fixture and a decoy`, async () => {
+    test(`${task.id}: check passes a correct solution, fails the fixture, a decoy and the v1 answer`, async () => {
       expect(await task.check(fixture(task, SOLUTIONS[task.id]))).toEqual({ pass: true, reason: 'ok' });
       expect((await task.check(fixture(task))).pass).toBe(false);
       expect((await task.check(fixture(task, DECOYS[task.id]))).pass).toBe(false);
+      expect((await task.check(fixture(task, V1[task.id]))).pass).toBe(false);
     });
   }
+  test('prompts and fixtures name none of the changed rules (ISC-26)', () => {
+    for (const task of tasks) expect(JSON.stringify([task.prompt, task.files])).not.toMatch(/VALIDATION_FAILED|RECORD_NOT_FOUND|INVALID_INPUT|\.test\.ts|\.spec\.ts/);
+  });
 });
